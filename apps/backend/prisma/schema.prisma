@@ -11,4 +11,15 @@ model Transcript {
   filename  String
   content   String   @db.Text
   createdAt DateTime @default(now())
+
+  dependencyGraph DependencyGraph?
+}
+
+model DependencyGraph {
+  id           String   @id @default(cuid())
+  transcriptId String   @unique
+  transcript   Transcript @relation(fields: [transcriptId], references: [id])
+
+  graphData    Json
+  createdAt    DateTime @default(now())
 }
