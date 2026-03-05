@@ -10,6 +10,7 @@ model Transcript {
   id        String   @id @default(uuid())
   filename  String
   content   String   @db.Text
+  contentHash String   @unique
   createdAt DateTime @default(now())
 
   dependencyGraph DependencyGraph?
