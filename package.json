@@ -1,0 +1,17 @@
+{
+  "name": "insightboard",
+  "version": "1.0.0",
+  "description": "\"# insightboard\"",
+  "main": "index.js",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "turbo": "^2.8.13"
+  }
+}
