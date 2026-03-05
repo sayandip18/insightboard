@@ -1,35 +1,40 @@
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { validateTasks, sanitizeDependencies, resolveCycles } from "./utils";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+
+const model = genAI.getGenerativeModel({
+  model: "gemini-1.5-flash",
 });
 
 export async function generateTasksFromTranscript(transcript: string) {
-  const response = await client.chat.completions.create({
-    model: "gpt-4.1-mini",
-    messages: [
-      {
-        role: "system",
-        content: `You convert meeting transcripts into tasks.
-Return JSON only with the following schema:
+  const prompt = `
+You convert meeting transcripts into tasks.
+
+Return ONLY valid JSON with the following structure:
 
 [
- {
-   "id": "string",
-   "description": "string",
-   "priority": "low | medium | high",
-   "dependencies": ["taskId"]
- }
-]`,
-      },
-      {
-        role: "user",
-        content: transcript,
-      },
-    ],
-  });
+  {
+    "id": "string",
+    "description": "string",
+    "priority": "low | medium | high",
+    "dependencies": ["taskId"]
+  }
+]
 
-  const content = response.choices[0].message.content;
+Rules:
+- IDs must be unique.
+- dependencies must only reference existing task IDs.
+- Do not include explanations.
+- Output valid JSON only.
 
-  return JSON.parse(content!);
+Transcript:
+${transcript}
+`;
+
+  const result = await model.generateContent(prompt);
+
+  const text = result.response.text().replace(/^```(?:json)?\n?/m, "").replace(/```$/m, "").trim();
+
+  return resolveCycles(sanitizeDependencies(validateTasks(JSON.parse(text))));
 }
