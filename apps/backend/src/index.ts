@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import multer from "multer";
 import { PrismaClient } from "@prisma/client";
+import { generateTasksFromTranscript } from "./llm";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -33,13 +34,21 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     data: { filename, content },
   });
 
-  res
-    .status(201)
-    .json({
-      id: transcript.id,
-      filename: transcript.filename,
-      createdAt: transcript.createdAt,
-    });
+  const tasks = await generateTasksFromTranscript(content);
+
+  const dependencyGraph = await prisma.dependencyGraph.create({
+    data: {
+      transcriptId: transcript.id,
+      graphData: tasks,
+    },
+  });
+
+  res.status(201).json({
+    id: transcript.id,
+    filename: transcript.filename,
+    createdAt: transcript.createdAt,
+    dependencyGraph: dependencyGraph.graphData,
+  });
 });
 
 app.listen(4000, () => {
