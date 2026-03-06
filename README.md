@@ -7,7 +7,7 @@ A full-stack monorepo application that converts meeting transcripts into structu
 - **Frontend:** React 19, Vite, TypeScript, MUI, Tailwind CSS
 - **Backend:** Node.js, Express 5, TypeScript, Prisma ORM
 - **Database:** PostgreSQL 16
-- **LLM:** Google Gemini 2.0 Flash
+- **LLM:** Google Gemini 2.5 Flash
 - **Monorepo tooling:** pnpm workspaces, Turborepo
 
 ---
@@ -74,6 +74,12 @@ From the `apps/backend` directory:
 cd apps/backend
 pnpm exec prisma migrate deploy
 pnpm exec prisma generate
+```
+
+### 6. To enter the postgres container from inside the command line in docker desktop
+
+```bash
+psql -U postgres -d insightboard
 ```
 
 ---
