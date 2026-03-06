@@ -9,28 +9,27 @@ const model = genAI.getGenerativeModel({
 
 export async function generateTasksFromTranscript(transcript: string) {
   const prompt = `
-You convert meeting transcripts into tasks.
+    Convert the meeting transcript into a comprehensive task dependency graph.
 
-Return ONLY valid JSON with the following structure:
+    Rules:
+    1. Identify all technical tasks, sub-tasks, and legacy maintenance mentioned.
+    2. Define a "Final Milestone" task (e.g., Launch/Release) if implied, which depends on all critical path tasks.
+    3. Map dependencies even if they are implicit (e.g., if a Dev says "I need X fixed before I can test Y," Y depends on X).
+    4. Extract priority based on speaker urgency (P0/Showstopper = high).
 
-[
-  {
-    "id": "string",
-    "description": "string",
-    "priority": "low | medium | high",
-    "dependencies": ["taskId"]
-  }
-]
+    Return ONLY valid JSON:
+    [
+      {
+        "id": "string",
+        "description": "string",
+        "priority": "low | medium | high",
+        "dependencies": ["taskId"]
+      }
+    ]
 
-Rules:
-- IDs must be unique.
-- dependencies must only reference existing task IDs.
-- Do not include explanations.
-- Output valid JSON only.
-
-Transcript:
-${transcript}
-`;
+    Transcript:
+    ${transcript}
+  `;
 
   const result = await model.generateContent(prompt);
 

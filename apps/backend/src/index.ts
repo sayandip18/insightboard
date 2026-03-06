@@ -79,6 +79,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
   const content = req.file.buffer.toString("utf-8");
   const filename = req.file.originalname;
   const contentHash = hashTranscript(content);
+  const force = req.query.force === "true";
 
   const existing = await prisma.transcript.findUnique({
     where: { contentHash },
@@ -86,19 +87,24 @@ app.post("/upload", upload.single("file"), async (req, res) => {
   });
 
   if (existing) {
-    if (existing.dependencyGraph) {
+    if (!force && existing.dependencyGraph) {
       const job = await prisma.job.create({
         data: { transcriptId: existing.id, status: "COMPLETED" },
       });
       res.status(200).json({ jobId: job.id, cached: true });
       return;
     }
-    const activeJob = await prisma.job.findFirst({
-      where: { transcriptId: existing.id, status: { in: ["PENDING", "PROCESSING"] } },
-    });
-    if (activeJob) {
-      res.status(200).json({ jobId: activeJob.id });
-      return;
+    if (!force) {
+      const activeJob = await prisma.job.findFirst({
+        where: { transcriptId: existing.id, status: { in: ["PENDING", "PROCESSING"] } },
+      });
+      if (activeJob) {
+        res.status(200).json({ jobId: activeJob.id });
+        return;
+      }
+    }
+    if (force && existing.dependencyGraph) {
+      await prisma.dependencyGraph.delete({ where: { transcriptId: existing.id } });
     }
   }
 

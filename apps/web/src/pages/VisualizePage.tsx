@@ -47,7 +47,10 @@ export function VisualizePage() {
     if (!selectedJobId) return;
     fetch(`http://localhost:4000/jobs/${selectedJobId}/graph`)
       .then((r) => r.json())
-      .then((data) => setGraphData({ jobId: selectedJobId, tasks: data }))
+      .then((data) => {
+        console.log(data);
+        setGraphData({ jobId: selectedJobId, tasks: data });
+      })
       .catch(() => setGraphData(null));
   }, [selectedJobId]);
 
