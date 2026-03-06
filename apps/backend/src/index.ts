@@ -223,7 +223,8 @@ app.get("/jobs/:jobId", async (req, res) => {
 });
 
 recoverStuckJobs().then(() => {
-  app.listen(4000, () => {
-    console.log("Backend running on port 4000");
+  const port = process.env.PORT ?? 4000;
+  app.listen(port, () => {
+    console.log(`Backend running on port ${port}`);
   });
 });

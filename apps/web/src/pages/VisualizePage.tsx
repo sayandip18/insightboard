@@ -37,7 +37,7 @@ export function VisualizePage() {
   // TODO: replace useffects with react-query for better caching, loading, error handling
   // Fetch the list of all completed jobs once on mount to populate the left panel.
   useEffect(() => {
-    fetch("http://localhost:4000/jobs/completed")
+    fetch(`${import.meta.env.VITE_API_URL ?? "http://localhost:4000"}/jobs/completed`)
       .then((r) => r.json())
       .then((data) => setJobs(deduplicateBy(data, "transcriptId")))
       .finally(() => setLoadingJobs(false));
@@ -46,10 +46,9 @@ export function VisualizePage() {
   // Whenever the selected job changes, fetch its dependency graph for the right panel.
   useEffect(() => {
     if (!selectedJobId) return;
-    fetch(`http://localhost:4000/jobs/${selectedJobId}/graph`)
+    fetch(`${import.meta.env.VITE_API_URL ?? "http://localhost:4000"}/jobs/${selectedJobId}/graph`)
       .then((r) => r.json())
       .then((data) => {
-        console.log(data);
         setGraphData({ jobId: selectedJobId, tasks: data });
       })
       .catch(() => setGraphData(null));

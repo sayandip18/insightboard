@@ -43,9 +43,8 @@ export function FileUpload({ onJobAdded }: Props) {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const url = force
-        ? "http://localhost:4000/upload?force=true"
-        : "http://localhost:4000/upload";
+      const base = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
+      const url = force ? `${base}/upload?force=true` : `${base}/upload`;
       const res = await fetch(url, {
         method: "POST",
         body: formData,

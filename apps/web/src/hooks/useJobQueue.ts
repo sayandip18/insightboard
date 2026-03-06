@@ -54,7 +54,7 @@ export function useJobQueue() {
       await Promise.all(
         active.map(async job => {
           try {
-            const res = await fetch(`http://localhost:4000/jobs/${job.jobId}`)
+            const res = await fetch(`${import.meta.env.VITE_API_URL ?? "http://localhost:4000"}/jobs/${job.jobId}`)
             const data = await res.json()
             if (data.status !== job.status) {
               updateJob(job.jobId, { status: data.status, error: data.error })
