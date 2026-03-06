@@ -118,3 +118,35 @@ pnpm dev
 ```
 
 ---
+
+## Submission details
+
+Levels completed: 1 and 2. 3 is only partly completed with a minimal UI.
+
+**Cycle detection algorithm**
+
+First, construct a graph (adjacency list) from the tasks. Uses a
+recursion stack to identify presence of cycle and a path list to track all tasks visited in that cycle.
+Finally, it marks all the tasks in a cycle as "Blocked".
+
+**Idempotency logic**
+
+1. Every uploaded file is hashed. Transcript table has an "@unique" column called contentHash.
+   This prevents the two similar files from being processed by LLM twice. When POST /upload endpoint
+   is called it looks up the transcript by contentHash, if not found only then we proceed.
+
+Note that just to bypass this feature, I have added a checkbox called "Force Regenerate" which removes
+old generated dependency graph and makes LLM call on the newly uploaded one.
+
+2. On calling POST /upload, if a matching hashed transcript is found but the job status is Pending/Processing,
+   it means that the job already exists and we should not create more jobs for the same. When user tries to upload
+   the same transcript before it is done processing, it returns the same job from before.
+
+3. If two concurrent requests are made with identical transcript, one will hit the Prisma unique
+   constrain error. This error is gracefully handled and we refetch the already existing transcript and apply
+   the same caching/job logic.
+
+4. On server startup, jobs previously in Processing State are set to FAILED. This allows retries. The user has to manually upload that file.
+
+5. On frontend, jobs are stored in local storage, on page refresh, the same job list is restored so user knows
+   what transcripts are previously processed.
