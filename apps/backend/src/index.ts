@@ -149,6 +149,42 @@ app.post("/upload", upload.single("file"), async (req, res) => {
   res.status(202).json({ jobId: job.id });
 });
 
+app.get("/jobs/completed", async (_req, res) => {
+  const jobs = await prisma.job.findMany({
+    where: { status: "COMPLETED" },
+    include: { transcript: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  res.json(
+    jobs.map((job) => ({
+      jobId: job.id,
+      filename: job.transcript!.filename,
+      transcriptId: job.transcriptId,
+      createdAt: job.createdAt,
+    }))
+  );
+});
+
+app.get("/jobs/:jobId/graph", async (req, res) => {
+  const job = await prisma.job.findUnique({
+    where: { id: req.params.jobId },
+    include: { transcript: { include: { dependencyGraph: true } } },
+  });
+
+  if (!job) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+
+  if (job.status !== "COMPLETED" || !job.transcript?.dependencyGraph) {
+    res.status(400).json({ error: "Graph not available" });
+    return;
+  }
+
+  res.json(job.transcript.dependencyGraph.graphData);
+});
+
 app.get("/jobs/:jobId", async (req, res) => {
   const job = await prisma.job.findUnique({
     where: { id: req.params.jobId },
