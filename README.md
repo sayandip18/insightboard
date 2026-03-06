@@ -7,7 +7,7 @@ A full-stack monorepo application that converts meeting transcripts into structu
 - **Frontend:** React 19, Vite, TypeScript, MUI, Tailwind CSS
 - **Backend:** Node.js, Express 5, TypeScript, Prisma ORM
 - **Database:** PostgreSQL 16
-- **LLM:** Google Gemini 1.5 Flash
+- **LLM:** Google Gemini 2.0 Flash
 - **Monorepo tooling:** pnpm workspaces, Turborepo
 
 ---

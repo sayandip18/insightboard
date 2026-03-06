@@ -1,7 +1,9 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import multer from "multer";
 import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import crypto from "crypto";
 import { generateTasksFromTranscript } from "./llm";
 
@@ -10,7 +12,8 @@ function hashTranscript(content: string) {
 }
 
 const app = express();
-const prisma = new PrismaClient();
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+const prisma = new PrismaClient({ adapter });
 
 app.use(cors());
 app.use(express.json());
@@ -26,15 +29,26 @@ const upload = multer({
   },
 });
 
-async function processJob(jobId: string, transcriptId: string, content: string) {
-  await prisma.job.update({ where: { id: jobId }, data: { status: "PROCESSING" } });
+async function processJob(
+  jobId: string,
+  transcriptId: string,
+  content: string,
+) {
+  await prisma.job.update({
+    where: { id: jobId },
+    data: { status: "PROCESSING" },
+  });
   try {
     const tasks = await generateTasksFromTranscript(content);
     await prisma.dependencyGraph.create({
       data: { transcriptId, graphData: tasks },
     });
-    await prisma.job.update({ where: { id: jobId }, data: { status: "COMPLETED" } });
+    await prisma.job.update({
+      where: { id: jobId },
+      data: { status: "COMPLETED" },
+    });
   } catch (err) {
+    console.error(`Error processing job ${jobId}:`, err);
     await prisma.job.update({
       where: { id: jobId },
       data: { status: "FAILED", error: String(err) },
@@ -46,7 +60,10 @@ async function processJob(jobId: string, transcriptId: string, content: string) 
 async function recoverStuckJobs() {
   const updated = await prisma.job.updateMany({
     where: { status: "PROCESSING" },
-    data: { status: "FAILED", error: "Server restarted while job was processing" },
+    data: {
+      status: "FAILED",
+      error: "Server restarted while job was processing",
+    },
   });
   if (updated.count > 0) {
     console.log(`Recovered ${updated.count} stuck job(s) on startup`);
@@ -68,24 +85,42 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     include: { dependencyGraph: true },
   });
 
-  if (existing?.dependencyGraph) {
-    const job = await prisma.job.create({
-      data: { transcriptId: existing.id, status: "COMPLETED" },
+  if (existing) {
+    if (existing.dependencyGraph) {
+      const job = await prisma.job.create({
+        data: { transcriptId: existing.id, status: "COMPLETED" },
+      });
+      res.status(200).json({ jobId: job.id, cached: true });
+      return;
+    }
+    const activeJob = await prisma.job.findFirst({
+      where: { transcriptId: existing.id, status: { in: ["PENDING", "PROCESSING"] } },
     });
-    res.status(200).json({ jobId: job.id, cached: true });
-    return;
+    if (activeJob) {
+      res.status(200).json({ jobId: activeJob.id });
+      return;
+    }
   }
 
   let transcript;
   try {
-    transcript = await prisma.transcript.create({
+    transcript = existing ?? await prisma.transcript.create({
       data: { filename, content, contentHash },
     });
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2002"
+    ) {
       const raceExisting = await prisma.transcript.findUnique({
         where: { contentHash },
-        include: { dependencyGraph: true, jobs: { where: { status: { in: ["PENDING", "PROCESSING"] } }, take: 1 } },
+        include: {
+          dependencyGraph: true,
+          jobs: {
+            where: { status: { in: ["PENDING", "PROCESSING"] } },
+            take: 1,
+          },
+        },
       });
       if (raceExisting?.dependencyGraph) {
         const job = await prisma.job.create({
@@ -108,6 +143,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     data: { transcriptId: transcript.id, status: "PENDING" },
   });
 
+  // Process the job async without blocking the main thread.
   processJob(job.id, transcript.id, content).catch(console.error);
 
   res.status(202).json({ jobId: job.id });
@@ -124,7 +160,10 @@ app.get("/jobs/:jobId", async (req, res) => {
     return;
   }
 
-  const response: Record<string, unknown> = { jobId: job.id, status: job.status };
+  const response: Record<string, unknown> = {
+    jobId: job.id,
+    status: job.status,
+  };
 
   if (job.status === "COMPLETED" && job.transcript?.dependencyGraph) {
     response.result = {
