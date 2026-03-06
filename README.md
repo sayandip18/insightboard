@@ -150,3 +150,7 @@ old generated dependency graph and makes LLM call on the newly uploaded one.
 
 5. On frontend, jobs are stored in local storage, on page refresh, the same job list is restored so user knows
    what transcripts are previously processed.
+
+**Color coding**
+
+Color coding is based on task priority. High priority is red, medium is yellow and low is green.
