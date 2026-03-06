@@ -4,22 +4,23 @@ import {
   Typography,
   Paper,
   LinearProgress,
-  Chip,
 } from '@mui/material'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile'
-import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 
-export function FileUpload() {
+type Props = {
+  onJobAdded: (jobId: string, filename: string, cached: boolean) => void
+}
+
+export function FileUpload({ onJobAdded }: Props) {
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
-  const [uploaded, setUploaded] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files?.[0] ?? null
-    setFile(selected)
-    setUploaded(false)
+    setFile(e.target.files?.[0] ?? null)
+    setError(null)
   }
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -27,17 +28,33 @@ export function FileUpload() {
     const dropped = e.dataTransfer.files?.[0] ?? null
     if (dropped && dropped.type !== 'text/plain') return
     setFile(dropped)
-    setUploaded(false)
+    setError(null)
   }
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!file) return
     setUploading(true)
-    // Simulate upload
-    setTimeout(() => {
+    setError(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('http://localhost:4000/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error ?? 'Upload failed')
+      }
+      const data = await res.json()
+      onJobAdded(data.jobId, file.name, data.cached ?? false)
+      setFile(null)
+      if (inputRef.current) inputRef.current.value = ''
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
       setUploading(false)
-      setUploaded(true)
-    }, 1500)
+    }
   }
 
   const formatSize = (bytes: number) =>
@@ -46,15 +63,7 @@ export function FileUpload() {
       : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 
   return (
-    <div className="w-full max-w-lg">
-      <Typography variant="h4" className="!font-bold !mb-1 text-gray-800">
-        InsightBoard
-      </Typography>
-      <Typography variant="body1" className="!mb-6 text-gray-500">
-        Upload a file to get started with your analysis.
-      </Typography>
-
-      {/* Drop zone */}
+    <div className="w-full">
       <Paper
         variant="outlined"
         className="!rounded-2xl !border-2 !border-dashed !border-blue-300 !bg-blue-50 cursor-pointer hover:!bg-blue-100 transition-colors"
@@ -68,7 +77,7 @@ export function FileUpload() {
             Drag &amp; drop your file here
           </Typography>
           <Typography variant="body2" className="text-gray-400 !mt-1">
-            or click to browse
+            or click to browse — .txt files only
           </Typography>
         </div>
       </Paper>
@@ -81,36 +90,28 @@ export function FileUpload() {
         onChange={handleFileChange}
       />
 
-      {/* Selected file info */}
       {file && (
         <div className="mt-4 flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-200 shadow-sm">
-          <InsertDriveFileIcon className="text-blue-400" />
+          <InsertDriveFileIcon className="text-blue-400 shrink-0" />
           <div className="flex-1 min-w-0">
-            <Typography
-              variant="body2"
-              className="!font-medium text-gray-700 truncate"
-            >
+            <Typography variant="body2" className="!font-medium text-gray-700 truncate">
               {file.name}
             </Typography>
             <Typography variant="caption" className="text-gray-400">
               {formatSize(file.size)}
             </Typography>
           </div>
-          {uploaded && (
-            <Chip
-              icon={<CheckCircleIcon />}
-              label="Uploaded"
-              color="success"
-              size="small"
-            />
-          )}
         </div>
       )}
 
-      {/* Progress bar */}
       {uploading && <LinearProgress className="!mt-3 !rounded-full" />}
 
-      {/* Upload button */}
+      {error && (
+        <Typography variant="caption" className="!mt-2 !block text-red-500">
+          {error}
+        </Typography>
+      )}
+
       <Button
         variant="contained"
         size="large"
@@ -118,9 +119,9 @@ export function FileUpload() {
         className="!mt-4 !rounded-xl !py-3 !font-semibold !normal-case"
         startIcon={<UploadFileIcon />}
         onClick={handleUpload}
-        disabled={!file || uploading || uploaded}
+        disabled={!file || uploading}
       >
-        {uploading ? 'Uploading…' : uploaded ? 'Uploaded' : 'Upload File'}
+        {uploading ? 'Uploading…' : 'Upload File'}
       </Button>
     </div>
   )
