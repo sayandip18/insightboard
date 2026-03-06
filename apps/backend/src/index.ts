@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import multer from "multer";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import crypto from "crypto";
 import { generateTasksFromTranscript } from "./llm";
 
@@ -52,9 +52,30 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     return;
   }
 
-  const transcript = await prisma.transcript.create({
-    data: { filename, content, contentHash },
-  });
+  let transcript;
+  try {
+    transcript = await prisma.transcript.create({
+      data: { filename, content, contentHash },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      const existing = await prisma.transcript.findUnique({
+        where: { contentHash },
+        include: { dependencyGraph: true },
+      });
+      if (existing && existing.dependencyGraph) {
+        res.status(200).json({
+          id: existing.id,
+          filename: existing.filename,
+          createdAt: existing.createdAt,
+          dependencyGraph: existing.dependencyGraph.graphData,
+          cached: true,
+        });
+        return;
+      }
+    }
+    throw err;
+  }
 
   const tasks = await generateTasksFromTranscript(content);
 
