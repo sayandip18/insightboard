@@ -26,6 +26,33 @@ const upload = multer({
   },
 });
 
+async function processJob(jobId: string, transcriptId: string, content: string) {
+  await prisma.job.update({ where: { id: jobId }, data: { status: "PROCESSING" } });
+  try {
+    const tasks = await generateTasksFromTranscript(content);
+    await prisma.dependencyGraph.create({
+      data: { transcriptId, graphData: tasks },
+    });
+    await prisma.job.update({ where: { id: jobId }, data: { status: "COMPLETED" } });
+  } catch (err) {
+    await prisma.job.update({
+      where: { id: jobId },
+      data: { status: "FAILED", error: String(err) },
+    });
+  }
+}
+
+// On startup, mark any stuck PROCESSING jobs as FAILED (crash recovery)
+async function recoverStuckJobs() {
+  const updated = await prisma.job.updateMany({
+    where: { status: "PROCESSING" },
+    data: { status: "FAILED", error: "Server restarted while job was processing" },
+  });
+  if (updated.count > 0) {
+    console.log(`Recovered ${updated.count} stuck job(s) on startup`);
+  }
+}
+
 app.post("/upload", upload.single("file"), async (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: "No file uploaded" });
@@ -41,14 +68,11 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     include: { dependencyGraph: true },
   });
 
-  if (existing && existing.dependencyGraph) {
-    res.status(200).json({
-      id: existing.id,
-      filename: existing.filename,
-      createdAt: existing.createdAt,
-      dependencyGraph: existing.dependencyGraph.graphData,
-      cached: true,
+  if (existing?.dependencyGraph) {
+    const job = await prisma.job.create({
+      data: { transcriptId: existing.id, status: "COMPLETED" },
     });
+    res.status(200).json({ jobId: job.id, cached: true });
     return;
   }
 
@@ -59,41 +83,66 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      const existing = await prisma.transcript.findUnique({
+      const raceExisting = await prisma.transcript.findUnique({
         where: { contentHash },
-        include: { dependencyGraph: true },
+        include: { dependencyGraph: true, jobs: { where: { status: { in: ["PENDING", "PROCESSING"] } }, take: 1 } },
       });
-      if (existing && existing.dependencyGraph) {
-        res.status(200).json({
-          id: existing.id,
-          filename: existing.filename,
-          createdAt: existing.createdAt,
-          dependencyGraph: existing.dependencyGraph.graphData,
-          cached: true,
+      if (raceExisting?.dependencyGraph) {
+        const job = await prisma.job.create({
+          data: { transcriptId: raceExisting.id, status: "COMPLETED" },
         });
+        res.status(200).json({ jobId: job.id, cached: true });
         return;
       }
+      if (raceExisting?.jobs[0]) {
+        res.status(200).json({ jobId: raceExisting.jobs[0].id });
+        return;
+      }
+      transcript = raceExisting!;
+    } else {
+      throw err;
     }
-    throw err;
   }
 
-  const tasks = await generateTasksFromTranscript(content);
-
-  const dependencyGraph = await prisma.dependencyGraph.create({
-    data: {
-      transcriptId: transcript.id,
-      graphData: tasks,
-    },
+  const job = await prisma.job.create({
+    data: { transcriptId: transcript.id, status: "PENDING" },
   });
 
-  res.status(201).json({
-    id: transcript.id,
-    filename: transcript.filename,
-    createdAt: transcript.createdAt,
-    dependencyGraph: dependencyGraph.graphData,
-  });
+  processJob(job.id, transcript.id, content).catch(console.error);
+
+  res.status(202).json({ jobId: job.id });
 });
 
-app.listen(4000, () => {
-  console.log("Backend running on port 4000");
+app.get("/jobs/:jobId", async (req, res) => {
+  const job = await prisma.job.findUnique({
+    where: { id: req.params.jobId },
+    include: { transcript: { include: { dependencyGraph: true } } },
+  });
+
+  if (!job) {
+    res.status(404).json({ error: "Job not found" });
+    return;
+  }
+
+  const response: Record<string, unknown> = { jobId: job.id, status: job.status };
+
+  if (job.status === "COMPLETED" && job.transcript?.dependencyGraph) {
+    response.result = {
+      transcriptId: job.transcriptId,
+      filename: job.transcript.filename,
+      dependencyGraph: job.transcript.dependencyGraph.graphData,
+    };
+  }
+
+  if (job.status === "FAILED") {
+    response.error = job.error;
+  }
+
+  res.json(response);
+});
+
+recoverStuckJobs().then(() => {
+  app.listen(4000, () => {
+    console.log("Backend running on port 4000");
+  });
 });

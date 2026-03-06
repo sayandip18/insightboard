@@ -6,14 +6,32 @@ datasource db {
   provider = "postgresql"
 }
 
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model Job {
+  id           String    @id @default(uuid())
+  transcriptId String?
+  transcript   Transcript? @relation(fields: [transcriptId], references: [id])
+  status       JobStatus @default(PENDING)
+  error        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
 model Transcript {
-  id        String   @id @default(uuid())
-  filename  String
-  content   String   @db.Text
+  id          String   @id @default(uuid())
+  filename    String
+  content     String   @db.Text
   contentHash String   @unique
-  createdAt DateTime @default(now())
+  createdAt   DateTime @default(now())
 
   dependencyGraph DependencyGraph?
+  jobs            Job[]
 }
 
 model DependencyGraph {
