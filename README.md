@@ -28,7 +28,7 @@ Make sure you have the following installed:
 ### 1. Clone the repository
 
 ```bash
-git clone <repo-url>
+git clone git@github.com:sayandip18/insightboard.git
 cd insightboard
 ```
 
