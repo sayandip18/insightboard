@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { deduplicateBy } from '../utils'
 
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
 
@@ -31,10 +32,12 @@ export function useJobQueue() {
   }, [jobs])
 
   const addJob = useCallback((jobId: string, filename: string, cached = false) => {
-    setJobs(prev => [
-      { jobId, filename, status: cached ? 'COMPLETED' : 'PENDING', cached },
-      ...prev,
-    ])
+    setJobs(prev =>
+      deduplicateBy(
+        [{ jobId, filename, status: cached ? 'COMPLETED' : 'PENDING', cached }, ...prev],
+        'filename'
+      )
+    )
   }, [])
 
   const updateJob = useCallback((jobId: string, updates: Partial<JobEntry>) => {

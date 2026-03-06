@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { deduplicateBy } from "../utils";
 import { Typography, Button, Paper, CircularProgress } from "@mui/material";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import { DependencyGraph } from "../components/DependencyGraph";
@@ -38,7 +39,7 @@ export function VisualizePage() {
   useEffect(() => {
     fetch("http://localhost:4000/jobs/completed")
       .then((r) => r.json())
-      .then((data) => setJobs(data))
+      .then((data) => setJobs(deduplicateBy(data, "transcriptId")))
       .finally(() => setLoadingJobs(false));
   }, []);
 
