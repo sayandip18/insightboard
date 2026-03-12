@@ -119,10 +119,6 @@ pnpm dev
 
 ---
 
-## Submission details
-
-Levels completed: 1 and 2. 3 is only partly completed with a minimal UI.
-
 **Cycle detection algorithm**
 
 First, construct a graph (adjacency list) from the tasks. Uses a
